@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>VSCode-like Web Editor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fira+Code&display=swap');
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: 'Fira Code', monospace;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    overflow: hidden;
+  }
+  #container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+  #sidebar {
+    background-color: #252526;
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #333;
+    color: #ccc;
+  }
+  #sidebar header {
+    font-weight: 700;
+    font-size: 18px;
+    padding: 15px 20px;
+    border-bottom: 1px solid #333;
+    user-select: none;
+  }
+  #file-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .file-item {
+    padding: 6px 20px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-item:hover,
+  .file-item.active {
+    background-color: #094771;
+    color: white;
+  }
+  #add-file-btn {
+    display: block;
+    margin: 10px 20px;
+    padding: 6px 10px;
+    background-color: #0e639c;
+    border: none;
+    border-radius: 3px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    user-select: none;
+  }
+  #add-file-btn:hover {
+    background-color: #1177cc;
+  }
+  #editor-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #1e1e1e;
+  }
+  #tab-bar {
+    height: 38px;
+    background-color: #252526;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #333;
+    padding-left: 10px;
+  }
+  .tab {
+    color: #ccc;
+    background-color: #2d2d2d;
+    padding: 8px 12px;
+    margin-right: 5px;
+    border-radius: 3px 3px 0 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    user-select: none;
+  }
+  .tab.active {
+    background-color: #1e1e1e;
+    color: white;
+    border-bottom: 1px solid #1e1e1e;
+  }
+  .tab .close-btn {
+    margin-left: 8px;
+    font-weight: 700;
+    color: #888;
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab .close-btn:hover {
+    color: #ff4d4d;
+  }
+  #editor {
+    flex: 1;
+    padding: 10px;
+    outline: none;
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    line-height: 1.4em;
+    color: #d4d4d4;
+    background-color: #1e1e1e;
+    border: none;
+    white-space: pre;
+    overflow: auto;
+    caret-color: #ffffff;
+    tab-size: 2;
+  }
+  #status-bar {
+    height: 25px;
+    background-color: #007acc;
+    color: white;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    user-select: none;
+  }
+  #status-bar .info {
+    flex: 1;
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1e1e1e;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 5px;
+    border: 2px solid #1e1e1e;
+  }
+
+  /* Mobile responsiveness */
+  @media (max-width: 600px) {
+    #container {
+      flex-direction: column;
+    }
+    #sidebar {
+      width: 100%;
+      height: 120px;
+      border-right: none;
+      border-bottom: 1px solid #333;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+    }
+    #sidebar header {
+      display: none;
+    }
+    #file-list {
+      padding: 0;
+      display: flex;
+      flex-direction: row;
+      overflow-x: auto;
+      flex-grow: 1;
+      scrollbar-width: none; /* Firefox */
+    }
+    #file-list::-webkit-scrollbar {
+      display: none; /* Chrome, Safari */
+    }
+    .file-item {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      margin: 0 4px;
+      border-radius: 3px;
+    }
+    #add-file-btn {
+      margin: 0 10px 0 0;
+      padding: 6px 10px;
+      flex-shrink: 0;
+    }
+    #editor-container {
+      height: calc(100vh - 120px);
+    }
+    #tab-bar {
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    #tab-bar::-webkit-scrollbar {
+      display: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="container" role="main" aria-label="VSCode-like Web Editor">
+  <aside id="sidebar" aria-label="File Explorer">
+    <header>Explorer</header>
+    <div id="file-list" role="list" tabindex="0" aria-label="File list"></div>
+    <button id="add-file-btn" aria-label="Add new file">+ New File</button>
+  </aside>
+  <section id="editor-container">
+    <nav id="tab-bar" role="tablist" aria-label="Open files tabs"></nav>
+    <textarea id="editor" spellcheck="false" aria-label="Text editor" role="textbox"></textarea>
+    <div id="status-bar" role="contentinfo" aria-live="polite">
+      <div class="info" id="status-info">No file opened</div>
+      <div id="cursor-position" aria-hidden="true"></div>
+    </div>
+  </section>
+</div>
+<script>
+  // Basic VSCode-like Web Editor
+
+  const fileListElem = document.getElementById('file-list');
+  const addFileBtn = document.getElementById('add-file-btn');
+  const tabBar = document.getElementById('tab-bar');
+  const editor = document.getElementById('editor');
+  const statusInfo = document.getElementById('status-info');
+  const cursorPositionElem = document.getElementById('cursor-position');
+
+  let files = [];
+  let activeFileId = null;
+
+  function createFile(name, content = '') {
+    return {
+      id: `file-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      name,
+      content,
+      savedContent: content,
+    };
+  }
+
+  function renderFileList() {
+    fileListElem.innerHTML = '';
+    files.forEach(file => {
+      const fileItem = document.createElement('div');
+      fileItem.textContent = file.name;
+      fileItem.className = 'file-item';
+      fileItem.setAttribute('role', 'listitem');
+      fileItem.setAttribute('tabindex', '-1');
+      if (file.id === activeFileId) {
+        fileItem.classList.add('active');
+      }
+      fileItem.onclick = () => {
+        setActiveFile(file.id);
+      };
+      fileListElem.appendChild(fileItem);
+    });
+  }
+
+  function renderTabs() {
+    tabBar.innerHTML = '';
+    files.forEach(file => {
+      const tab = document.createElement('div');
+      tab.className = 'tab';
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', file.id === activeFileId ? 'true' : 'false');
+      tab.setAttribute('tabindex', file.id === activeFileId ? '0' : '-1');
+      tab.textContent = file.name;
+      if (file.id === activeFileId) tab.classList.add('active');
+
+      const closeBtn = document.createElement('span');
+      closeBtn.className = 'close-btn';
+      closeBtn.textContent = '×';
+      closeBtn.title = 'Close file';
+      closeBtn.setAttribute('aria-label', `Close ${file.name}`);
+      closeBtn.onclick = (event) => {
+        event.stopPropagation();
+        closeFile(file.id);
+      };
+
+      tab.appendChild(closeBtn);
+      tab.onclick = () => {
+        setActiveFile(file.id);
+      };
+      tab.onkeydown = (event) => {
+        if(event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+          event.preventDefault();
+          keyboardNavigateTabs(event.key, file.id);
+        }
+        if(event.key === 'Delete') {
+          closeFile(file.id);
+        }
+      };
+
+      tabBar.appendChild(tab);
+    });
+  }
+  
+  function keyboardNavigateTabs(key, currentId) {
+    const currentIndex = files.findIndex(f => f.id === currentId);
+    let newIndex = currentIndex;
+    if(key === 'ArrowRight') {
+      newIndex = (currentIndex + 1) % files.length;
+    } else if(key === 'ArrowLeft') {
+      newIndex = (currentIndex - 1 + files.length) % files.length;
+    }
+    setActiveFile(files[newIndex].id);
+    // Focus the newly active tab
+    const tabs = tabBar.querySelectorAll('.tab');
+    tabs[newIndex].focus();
+  }
+
+  function setActiveFile(fileId) {
+    if (activeFileId === fileId) return;
+    if(activeFileId !== null) {
+      saveCurrentFileContent();
+    }
+    activeFileId = fileId;
+    const file = getActiveFile();
+    editor.value = file ? file.content : '';
+    editor.focus();
+    updateStatusBar();
+    renderFileList();
+    renderTabs();
+  }
+
+  function getActiveFile() {
+    return files.find(file => file.id === activeFileId);
+  }
+
+  function saveCurrentFileContent() {
+    const file = getActiveFile();
+    if (file) {
+      file.content = editor.value;
+    }
+  }
+
+  function closeFile(fileId) {
+    if (activeFileId === fileId) {
+      const currentIndex = files.findIndex(f => f.id === fileId);
+      files.splice(currentIndex, 1);
+      if (files.length) {
+        const newIndex = currentIndex === 0 ? 0 : currentIndex - 1;
+        setActiveFile(files[newIndex].id);
+      } else {
+        activeFileId = null;
+        editor.value = '';
+        updateStatusBar();
+      }
+    } else {
+      files = files.filter(f => f.id !== fileId);
+    }
+    renderFileList();
+    renderTabs();
+  }
+
+  function addNewFile() {
+    const baseName = 'untitled';
+    let name = `${baseName}.txt`;
+    let count = 1;
+    while (files.find(f => f.name === name)) {
+      name = `${baseName}${count}.txt`;
+      count++;
+    }
+    const newFile = createFile(name);
+    files.push(newFile);
+    setActiveFile(newFile.id);
+    renderFileList();
+    renderTabs();
+  }
+
+  function updateStatusBar() {
+    const file = getActiveFile();
+    if (!file) {
+      statusInfo.textContent = 'No file opened';
+      cursorPositionElem.textContent = '';
+      return;
+    }
+
+    let savedMark = file.content === file.savedContent ? '' : '●';
+    statusInfo.textContent = savedMark + ' ' + file.name;
+
+    updateCursorPosition();
+  }
+
+  function updateCursorPosition() {
+    const textarea = editor;
+    const text = textarea.value;
+    const pos = textarea.selectionStart;
+    let row = 1, col = 1;
+    for (let i = 0; i < pos; i++) {
+      if (text[i] === '\n') {
+        row++;
+        col = 1;
+      } else {
+        col++;
+      }
+    }
+    cursorPositionElem.textContent = `Ln ${row}, Col ${col}`;
+  }
+
+  editor.addEventListener('input', () => {
+    saveCurrentFileContent();
+    updateStatusBar();
+  });
+
+  editor.addEventListener('keyup', updateCursorPosition);
+  editor.addEventListener('click', updateCursorPosition);
+
+  addFileBtn.addEventListener('click', () => {
+    addNewFile();
+  });
+
+  // Keyboard shortcuts for editor - Save (Ctrl+S/Cmd+S)
+  window.addEventListener('keydown', (e) => {
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveFile();
+    }
+  });
+
+  function saveFile() {
+    let file = getActiveFile();
+    if(!file) return;
+    file.savedContent = file.content;
+    updateStatusBar();
+    statusInfo.textContent = `Saved ${file.name}`;
+    setTimeout(updateStatusBar, 1500);
+  }
+
+  // Initialize with one untitled file
+  addNewFile();
+</script>
+</body>
+</html>
+
+```
